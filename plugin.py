@@ -1,7 +1,7 @@
 import requests
 
 ICYARR_BASE = "http://your-icyarr-host"   # ← change this to your icyarr backend URL
-
+# place this file into dispatcharr/plugins/tickarr/zips/tickarr/plugin.py
 
 def fetch_icyarr_text(stream_url: str) -> str:
     """
