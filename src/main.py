@@ -2,20 +2,27 @@
 # ICYARR BACKEND — main.py
 # ============================================================
 # This FastAPI backend manages radio streams, loads M3U playlists,
-# merges metadata, tests streams, and exposes endpoints for Tickarr
-# and Dispatcharr integration.
+# merges metadata, tests streams, stores channels in SQLite,
+# and exposes endpoints for Tickarr and Dispatcharr.
 # ============================================================
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import requests
 
+# SQLite persistence layer
+from db import init_db, load_channels, save_channel, delete_channel
+
+
+# ============================================================
+# FASTAPI APP INITIALIZATION
+# ============================================================
+
 app = FastAPI()
 
-# In-memory list of channel objects
-# Each channel contains:
-#   name, group, tvg_id, tvg_name, url, icy_title, bitrate, etc.
-local_streams = []
+# Initialize SQLite database and load saved channels
+init_db()
+local_streams = load_channels()   # Persistent list loaded from channel.db
 
 
 # ============================================================
@@ -44,6 +51,7 @@ def merge_metadata(existing, incoming):
     merged = existing.copy()
 
     for key, value in incoming.items():
+        # Only fill missing fields
         if key not in merged or merged[key] in ("", None):
             merged[key] = value
 
@@ -51,17 +59,22 @@ def merge_metadata(existing, incoming):
 
 
 # ============================================================
-# ADD CHANNEL OBJECT (WITH MERGE)
+# ADD CHANNEL OBJECT (WITH MERGE + SAVE TO DB)
 # ============================================================
 
 def add_channel_object(channel):
+    # Check if channel already exists
     for existing in local_streams:
         if existing["url"] == channel["url"]:
+            # Merge metadata
             merged = merge_metadata(existing, channel)
             existing.update(merged)
+            save_channel(existing)  # Persist update
             return
 
+    # New channel
     local_streams.append(channel)
+    save_channel(channel)  # Persist new channel
 
 
 # ============================================================
@@ -70,6 +83,10 @@ def add_channel_object(channel):
 
 @app.post("/load_m3u")
 def load_m3u(req: M3URequest):
+    """
+    Loads an M3U playlist from a URL, parses metadata,
+    and stores channels in SQLite + memory.
+    """
     text = requests.get(req.url).text
     lines = text.splitlines()
     current = {}
@@ -77,6 +94,7 @@ def load_m3u(req: M3URequest):
     for line in lines:
         line = line.strip()
 
+        # Metadata line
         if line.startswith("#EXTINF"):
             meta, name = line.split(",", 1)
             current["name"] = name
@@ -90,6 +108,7 @@ def load_m3u(req: M3URequest):
                 if "group-title" in part:
                     current["group"] = part.split("=")[1].strip('"')
 
+        # URL line
         elif line and not line.startswith("#"):
             current["url"] = line
             add_channel_object(current)
@@ -104,6 +123,10 @@ def load_m3u(req: M3URequest):
 
 @app.post("/test_stream")
 def test_stream(req: StreamRequest):
+    """
+    Tests a stream URL by checking if it returns audio.
+    If valid, adds it to the channel list.
+    """
     try:
         r = requests.get(req.url, timeout=5, stream=True)
         content_type = r.headers.get("Content-Type", "")
@@ -124,6 +147,7 @@ def test_stream(req: StreamRequest):
 
 @app.get("/local_streams")
 def get_local_streams():
+    """Returns all channels currently stored."""
     return local_streams
 
 
@@ -133,12 +157,18 @@ def get_local_streams():
 
 @app.patch("/update_channel")
 def update_channel(req: UpdateChannel):
+    """
+    Updates channel metadata (name, group).
+    Saves changes to SQLite.
+    """
     for ch in local_streams:
         if ch["url"] == req.url:
             if req.name is not None:
                 ch["name"] = req.name
             if req.group is not None:
                 ch["group"] = req.group
+
+            save_channel(ch)  # Persist update
             return {"status": "updated", "channel": ch}
 
     return {"status": "not_found", "url": req.url}
@@ -149,10 +179,14 @@ def update_channel(req: UpdateChannel):
 # ============================================================
 
 @app.delete("/delete_channel")
-def delete_channel(url: str):
+def delete_channel_endpoint(url: str):
+    """
+    Deletes a channel from memory + SQLite.
+    """
     for ch in local_streams:
         if ch["url"] == url:
             local_streams.remove(ch)
+            delete_channel(url)  # Persist delete
             return {"status": "deleted", "url": url}
 
     return {"status": "not_found", "url": url}
@@ -161,9 +195,11 @@ def delete_channel(url: str):
 # ============================================================
 # TICKARR TEXT BUILDER
 # ============================================================
-# Builds a single "Now Playing" text string for Tickarr overlays.
 
 def build_tickarr_text(channel: dict) -> str:
+    """
+    Builds a Now Playing text string for Tickarr overlays.
+    """
     parts = []
 
     icy_title = channel.get("icy_title") or channel.get("stream_title")
@@ -189,10 +225,12 @@ def build_tickarr_text(channel: dict) -> str:
 # ============================================================
 # TICKARR TEXT ENDPOINT
 # ============================================================
-# Tickarr plugin calls this to get overlay text.
 
 @app.get("/tickarr_text")
 def tickarr_text(url: str):
+    """
+    Returns Now Playing text for Tickarr overlays.
+    """
     for ch in local_streams:
         if ch.get("url") == url:
             return {"text": build_tickarr_text(ch)}
@@ -201,12 +239,15 @@ def tickarr_text(url: str):
 
 
 # ============================================================
-# EXPORT M3U FOR DISPATCHARR ORGANIZER
+# EXPORT M3U FOR DISPATCHARR
 # ============================================================
-# Dispatcharr can import this URL directly.
 
 @app.get("/export_m3u")
 def export_m3u():
+    """
+    Builds and returns a clean M3U playlist
+    for Dispatcharr Organizer.
+    """
     lines = ["#EXTM3U"]
 
     for ch in local_streams:
