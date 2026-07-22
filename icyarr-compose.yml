@@ -8,6 +8,8 @@ services:
       dockerfile: Dockerfile
     expose:
       - "8000"
+    volumes:
+      - ./channel.db:/app/channel.db
     restart: unless-stopped
 
   icyarr-frontend:
