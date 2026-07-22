@@ -6,16 +6,8 @@ services:
     build:
       context: ./icyarr
       dockerfile: ./Dockerfile
-    expose:
-      - "8000"
+    ports:
+      - "8000:8000"   # expose backend + static frontend
     volumes:
       - ./icyarr/channel.db:/app/channel.db
-    restart: unless-stopped
-
-  icyarr-frontend:
-    container_name: icyarr-frontend
-    build:
-      context: ./icyarr/frontend
-    ports:
-      - "5173:5173"
     restart: unless-stopped
