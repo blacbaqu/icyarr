@@ -3,11 +3,28 @@ version: "3.9"
 services:
   icyarr:
     container_name: icyarr
-    build:
-      context: ./icyarr
-      dockerfile: ./Dockerfile
+
+    # Pull or build the Icyarr image
+    image: ghcr.io/yourname/icyarr:latest
+    # OR:
+    # build:
+    #   context: ./icyarr
+    #   dockerfile: ./Dockerfile
+
+    # Icyarr serves both the API and the static control panel on port 8000
     ports:
-      - "8000:8000"   # expose backend + static frontend
+      - "8000:8000"
+
+    # Persist the SQLite database outside the container
     volumes:
       - ./icyarr/channel.db:/app/channel.db
+
     restart: unless-stopped
+
+    # Healthcheck (optional but recommended)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
