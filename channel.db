@@ -1,9 +1,26 @@
+-- ============================================================
+-- ICYARR SQLite Schema
+-- Stores all radio channels loaded from M3U files or stream tests
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS channels (
+
+    -- The stream URL (unique identifier for each channel)
     url TEXT PRIMARY KEY,
+
+    -- Human-readable station name (from EXTINF or user edits)
     name TEXT,
+
+    -- Group/category (from M3U group-title or user edits)
     group_title TEXT,
+
+    -- TVG metadata fields (optional, used by some IPTV/M3U sources)
     tvg_id TEXT,
     tvg_name TEXT,
+
+    -- ICY metadata (Now Playing titles from streams)
     icy_title TEXT,
+
+    -- Bitrate reported by the stream (optional)
     bitrate INTEGER
 );
