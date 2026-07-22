@@ -1,0 +1,23 @@
+# -------------------------------
+# icyarr Backend Requirements
+# FastAPI metadata engine powering:
+# - Now Playing metadata
+# - Tickarr text overlays
+# - M3U export
+# - Future XMLTV + Local Game Mode
+# -------------------------------
+
+# FastAPI framework for the API
+fastapi
+
+# Uvicorn ASGI server used in Dockerfile CMD
+uvicorn
+
+# HTTP client for metadata fetches, ESPN calls, XMLTV downloads
+requests
+
+# Robust timestamp parsing (XMLTV, schedule windows, game detection)
+python-dateutil
+
+# Lightweight XML parser for XMLTV guide files
+xmltodict
