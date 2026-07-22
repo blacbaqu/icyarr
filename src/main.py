@@ -4,9 +4,15 @@
 # This FastAPI backend manages radio streams, loads M3U playlists,
 # merges metadata, tests streams, stores channels in SQLite,
 # and exposes endpoints for Tickarr and Dispatcharr.
+#
+# NEW (2026-07):
+# - Static frontend served from /static/index.html
+# - Root (/) now redirects to the control panel
 # ============================================================
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import requests
 
@@ -20,19 +26,25 @@ from db import init_db, load_channels, save_channel, delete_channel
 
 app = FastAPI()
 
+# Mount the static frontend folder
+# This serves /static/index.html and all JS/CSS inside /static
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # Initialize SQLite database and load saved channels
 init_db()
 local_streams = load_channels()   # Persistent list loaded from channel.db
 
 
 # ============================================================
-# ROOT ENDPOINT (REPLACES OLD JINJA2 TEMPLATE ROUTE)
+# ROOT ENDPOINT → REDIRECT TO FRONTEND
 # ============================================================
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 def root():
-    """Simple health/status endpoint."""
-    return {"status": "ok", "message": "Icyarr backend running"}
+    """
+    Redirects to the Icyarr Control Panel (static HTML frontend).
+    """
+    return RedirectResponse(url="/static/index.html")
 
 
 # ============================================================
@@ -54,14 +66,15 @@ class UpdateChannel(BaseModel):
 # ============================================================
 # METADATA MERGE LOGIC
 # ============================================================
-# icyarr always keeps its own metadata if present.
-# Incoming metadata only fills missing fields.
 
 def merge_metadata(existing, incoming):
+    """
+    Merge incoming metadata into existing channel metadata.
+    Only fills missing fields; never overwrites existing values.
+    """
     merged = existing.copy()
 
     for key, value in incoming.items():
-        # Only fill missing fields
         if key not in merged or merged[key] in ("", None):
             merged[key] = value
 
@@ -73,18 +86,20 @@ def merge_metadata(existing, incoming):
 # ============================================================
 
 def add_channel_object(channel):
-    # Check if channel already exists
+    """
+    Adds or updates a channel in memory + SQLite.
+    Performs metadata merge if channel already exists.
+    """
     for existing in local_streams:
         if existing["url"] == channel["url"]:
-            # Merge metadata
             merged = merge_metadata(existing, channel)
             existing.update(merged)
-            save_channel(existing)  # Persist update
+            save_channel(existing)
             return
 
     # New channel
     local_streams.append(channel)
-    save_channel(channel)  # Persist new channel
+    save_channel(channel)
 
 
 # ============================================================
@@ -178,7 +193,7 @@ def update_channel(req: UpdateChannel):
             if req.group is not None:
                 ch["group"] = req.group
 
-            save_channel(ch)  # Persist update
+            save_channel(ch)
             return {"status": "updated", "channel": ch}
 
     return {"status": "not_found", "url": req.url}
@@ -196,7 +211,7 @@ def delete_channel_endpoint(url: str):
     for ch in local_streams:
         if ch["url"] == url:
             local_streams.remove(ch)
-            delete_channel(url)  # Persist delete
+            delete_channel(url)
             return {"status": "deleted", "url": url}
 
     return {"status": "not_found", "url": url}
