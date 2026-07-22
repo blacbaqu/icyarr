@@ -1,23 +1,22 @@
-# -------------------------------
-# icyarr Backend Requirements
-# FastAPI metadata engine powering:
-# - Now Playing metadata
-# - Tickarr text overlays
-# - M3U export
-# - Future XMLTV + Local Game Mode
-# -------------------------------
+# ============================================================
+# ICYARR BACKEND — requirements.txt
+# ============================================================
+# These are the Python dependencies required for the FastAPI
+# backend, M3U loading, stream testing, and SQLite persistence.
+# ============================================================
 
-# FastAPI framework for the API
+# FastAPI framework for building the backend API
 fastapi
 
-# Uvicorn ASGI server used in Dockerfile CMD
+# Uvicorn ASGI server used to run FastAPI
 uvicorn
 
-# HTTP client for metadata fetches, ESPN calls, XMLTV downloads
+# HTTP client used for fetching M3U playlists and testing streams
 requests
 
-# Robust timestamp parsing (XMLTV, schedule windows, game detection)
-python-dateutil
+# Data validation and request models (M3URequest, StreamRequest, etc.)
+pydantic
 
-# Lightweight XML parser for XMLTV guide files
-xmltodict
+# SQLite binary package — ensures SQLite works inside Python slim images
+# (Python includes sqlite3, but this prevents missing extension issues)
+sqlite3-binary
